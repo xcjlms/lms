@@ -1,0 +1,28 @@
+# Build output
+build/
+cmake-build-*/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# vcpkg generated
+vcpkg_installed/
+
+# Claude config
+.claude/
+
+# Compiled binaries
+*.exe
+*.dll
+*.lib
+*.pdb
+
+# Database files (created at runtime)
+*.db
+
+# macOS
+.DS_Store
