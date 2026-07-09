@@ -27,6 +27,20 @@ public:
         ADD_METHOD_TO(ApiController::getBookList,  "/api/books",    Get);
         ADD_METHOD_TO(ApiController::addBook,      "/api/books",    Post);
 
+                // Books
+        ADD_METHOD_TO(ApiController::getBookList,  "/api/books",    Get);
+        ADD_METHOD_TO(ApiController::addBook,      "/api/books",    Post);
+
+        // Admin book / inventory / backup
+        ADD_METHOD_TO(ApiController::editBook,        "/api/books/{1}",                  Put);
+        ADD_METHOD_TO(ApiController::deleteBook,      "/api/books/{1}",                  Delete);
+        ADD_METHOD_TO(ApiController::increaseStock,   "/api/books/{1}/stock/increase",   Post);
+        ADD_METHOD_TO(ApiController::decreaseStock,   "/api/books/{1}/stock/decrease",   Post);
+        ADD_METHOD_TO(ApiController::getInventory,    "/api/inventory",                  Get);
+        ADD_METHOD_TO(ApiController::getLowStockBooks,"/api/inventory/low",              Get);
+        ADD_METHOD_TO(ApiController::backupData,      "/api/backup",                     Post);
+        ADD_METHOD_TO(ApiController::restoreData,     "/api/restore",                    Post);
+
         // Borrow history
         ADD_METHOD_TO(ApiController::getBorrowHistory, "/api/records", Get);
     METHOD_LIST_END
@@ -54,6 +68,34 @@ public:
                      std::function<void(const HttpResponsePtr&)>&& callback);
     void addBook(const HttpRequestPtr& req,
                  std::function<void(const HttpResponsePtr&)>&& callback);
+
+    void editBook(const HttpRequestPtr& req,
+                  std::function<void(const HttpResponsePtr&)>&& callback,
+                  int bookID);
+
+    void deleteBook(const HttpRequestPtr& req,
+                    std::function<void(const HttpResponsePtr&)>&& callback,
+                    int bookID);
+
+    void increaseStock(const HttpRequestPtr& req,
+                       std::function<void(const HttpResponsePtr&)>&& callback,
+                       int bookID);
+
+    void decreaseStock(const HttpRequestPtr& req,
+                       std::function<void(const HttpResponsePtr&)>&& callback,
+                       int bookID);
+
+    void getInventory(const HttpRequestPtr& req,
+                      std::function<void(const HttpResponsePtr&)>&& callback);
+
+    void getLowStockBooks(const HttpRequestPtr& req,
+                          std::function<void(const HttpResponsePtr&)>&& callback);
+
+    void backupData(const HttpRequestPtr& req,
+                    std::function<void(const HttpResponsePtr&)>&& callback);
+
+    void restoreData(const HttpRequestPtr& req,
+                     std::function<void(const HttpResponsePtr&)>&& callback);
 
     // ----- History -----
     void getBorrowHistory(const HttpRequestPtr& req,
