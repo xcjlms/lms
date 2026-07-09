@@ -12,7 +12,7 @@
           <li>反馈处理</li>
           <li>操作日志</li>
           <li>系统备份</li>
-          <li>退出登录</li>
+          <li @click="logout">退出登录</li>
         </ul>
       </nav>
     </aside>
@@ -21,19 +21,19 @@
       <section class="overview-cards">
         <article class="stat-card">
           <p class="title">在借图书总数</p>
-          <p class="value">1,248</p>
+          <p class="value">{{ borrowedTotal }}</p>
         </article>
         <article class="stat-card">
           <p class="title">逾期图书数量</p>
-          <p class="value">56</p>
+          <p class="value">{{ overdueCount }}</p>
         </article>
         <article class="stat-card">
           <p class="title">待缴罚款总额</p>
-          <p class="value">¥3,200</p>
+          <p class="value">¥{{ unpaidFines }}</p>
         </article>
         <article class="stat-card">
-          <p class="title">今日新增图书</p>
-          <p class="value">42</p>
+          <p class="title">馆藏图书总数</p>
+          <p class="value">{{ totalBooks }}</p>
         </article>
       </section>
 
@@ -95,6 +95,42 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import * as api from '../api/index.js'
+
+const router = useRouter()
+const borrowedTotal = ref(0)
+const overdueCount = ref(0)
+const unpaidFines = ref(0)
+const totalBooks = ref(0)
+
+async function fetchData() {
+  try {
+    const bookRes = await api.getBooks()
+    const books = bookRes.data?.books || []
+    totalBooks.value = books.length
+    borrowedTotal.value = books.reduce((s, b) => s + (b.total_stock - b.available_stock), 0)
+
+    const overdueRes = await api.getOverdueRecords()
+    const overdues = overdueRes.data || []
+    overdueCount.value = overdues.length
+
+    // Estimate unpaid fines from all users (simplified: query user 2 as sample)
+    const fineRes = await api.getUserFines(2)
+    const fines = fineRes.data?.fines || []
+    unpaidFines.value = fines.reduce((s, f) => f.status === 'UNPAID' ? s + f.amount : s, 0)
+  } catch (e) {
+    console.error('Failed to load admin stats:', e)
+  }
+}
+
+function logout() {
+  localStorage.removeItem('lms_user')
+  router.push('/login')
+}
+
+onMounted(fetchData)
 </script>
 
 <style scoped>

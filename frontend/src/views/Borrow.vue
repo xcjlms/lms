@@ -1,28 +1,46 @@
 <template>
   <div class="borrow-page">
-    <div class="detail-card">
+    <div class="search-bar">
+      <input v-model="keyword" placeholder="输入书名或作者搜索..." @keyup.enter="searchBooks" />
+      <button @click="searchBooks">搜索</button>
+    </div>
+    <div v-if="message" :class="['message', message.includes('失败') ? 'error' : '']">{{ message }}</div>
+    <div class="book-list" v-if="books.length > 0">
+      <article
+        v-for="b in books"
+        :key="b.book_id"
+        class="book-card"
+        :class="{ selected: selectedBook?.book_id === b.book_id }"
+        @click="selectBook(b)"
+      >
+        <div class="book-card-title">{{ b.title }}</div>
+        <div class="book-card-meta">{{ b.author }} · 可借 {{ b.available_stock }}/{{ b.total_stock }}</div>
+      </article>
+    </div>
+    <div class="empty-state" v-else-if="!keyword && books.length === 0">输入关键词搜索图书</div>
+    <div class="empty-state" v-else-if="keyword && books.length === 0">未找到匹配的图书</div>
+
+    <div class="detail-card" v-if="selectedBook">
       <div class="cover-panel">
-        <img :src="book.cover" alt="图书封面" class="book-cover" />
+        <div class="cover-placeholder">{{ selectedBook.title.charAt(0) }}</div>
       </div>
       <div class="info-panel">
-        <div class="book-title">{{ book.title }}</div>
+        <div class="book-title">{{ selectedBook.title }}</div>
         <div class="book-meta">
-          <p>作者：{{ book.author }}</p>
-          <p>ISBN：{{ book.isbn }}</p>
-          <p>出版社：{{ book.publisher }}</p>
-          <p>出版年份：{{ book.year }}</p>
-          <p>分类：{{ book.category }}</p>
-          <p>书架位置：{{ book.location }}</p>
+          <p>作者：{{ selectedBook.author }}</p>
+          <p>ISBN：{{ selectedBook.isbn }}</p>
+          <p>出版社：{{ selectedBook.publisher }}</p>
+          <p>书架位置：{{ selectedBook.location }}</p>
         </div>
         <div class="stock-info">
-          <div>总库存：{{ book.totalStock }}</div>
-          <div>可借数量：{{ availableStock }}</div>
+          <div>总库存：{{ selectedBook.total_stock }}</div>
+          <div>可借数量：{{ selectedBook.available_stock }}</div>
         </div>
-        <div class="rule-tip">最长借阅天数：{{ book.maxDays }}天</div>
+        <div class="rule-tip">最长借阅天数：30 天</div>
         <button
           class="borrow-button"
-          :class="{ disabled: availableStock <= 0 }"
-          :disabled="availableStock <= 0"
+          :class="{ disabled: selectedBook.available_stock <= 0 }"
+          :disabled="selectedBook.available_stock <= 0"
           @click="openBorrowDialog"
         >
           借阅此书
@@ -89,68 +107,62 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
+import * as api from '../api/index.js'
 
-const book = reactive({
-  title: 'Vue 项目实战',
-  author: '张三',
-  isbn: '978-7-111-12345-6',
-  publisher: '某某出版社',
-  year: 2023,
-  category: '计算机/前端',
-  location: 'A区-03架',
-  totalStock: 8,
-  available: 5,
-  maxDays: 30,
-  cover: 'https://via.placeholder.com/240x320?text=书籍封面',
-  description: '本书详细介绍了 Vue 3 项目构建、组件设计、状态管理、路由、打包部署等实战内容，适合前端开发者快速上手。',
-})
-
-const borrowRecords = ref([
-  { id: 1, reader: '李四', duration: 14, date: '2026-06-28', status: '已归还' },
-  { id: 2, reader: '王五', duration: 21, date: '2026-06-10', status: '逾期中' },
-])
-
-const comments = ref([
-  { id: 1, user: '小明', content: '内容实用，示例清晰，适合入门。' },
-  { id: 2, user: '小红', content: '章节安排合理，代码示例很有帮助。' },
-])
-
-const tabs = [
-  { key: 'intro', label: '图书简介' },
-  { key: 'records', label: '借阅记录' },
-  { key: 'comments', label: '读者评论反馈' },
-]
-
-const activeTab = ref('intro')
+const keyword = ref('')
+const books = ref([])
+const selectedBook = ref(null)
 const showDialog = ref(false)
 const borrowDuration = ref(14)
 const durationOptions = [7, 14, 21, 30]
+const message = ref('')
 
-const availableStock = computed(() => book.available)
+const raw = localStorage.getItem('lms_user')
+const userInfo = raw ? JSON.parse(raw) : {}
+
+async function searchBooks() {
+  try {
+    const res = await api.getBooks(keyword.value)
+    books.value = res.data?.books || []
+    selectedBook.value = null
+    message.value = ''
+  } catch (e) {
+    message.value = '搜索失败：' + e.message
+  }
+}
+
+function selectBook(b) {
+  selectedBook.value = b
+}
 
 function openBorrowDialog() {
-  if (availableStock.value <= 0) return
-  borrowDuration.value = 14
+  if (!selectedBook.value || selectedBook.value.available_stock <= 0) return
   showDialog.value = true
+  borrowDuration.value = 14
 }
 
 function closeDialog() {
   showDialog.value = false
 }
 
-function confirmBorrow() {
-  if (book.available <= 0) return
-  book.available -= 1
-  borrowRecords.value.unshift({
-    id: Date.now(),
-    reader: '当前用户',
-    duration: borrowDuration.value,
-    date: new Date().toISOString().slice(0, 10),
-    status: '借阅中',
-  })
-  closeDialog()
+async function confirmBorrow() {
+  if (!selectedBook.value || !userInfo.user_id) {
+    message.value = '请先登录'
+    return
+  }
+  try {
+    await api.borrowBook(userInfo.user_id, selectedBook.value.book_id)
+    message.value = `《${selectedBook.value.title}》借阅成功！`
+    showDialog.value = false
+    // Refresh book list
+    await searchBooks()
+  } catch (e) {
+    message.value = '借阅失败：' + e.message
+  }
 }
+
+onMounted(() => { searchBooks() })
 </script>
 
 <style scoped>
@@ -312,6 +324,18 @@ function confirmBorrow() {
   background: #f5f7fa;
   color: #606266;
 }
+/* New styles for search & book list */
+.search-bar { display: flex; gap: 12px; margin-bottom: 20px; }
+.search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 15px; }
+.search-bar button { padding: 10px 20px; border: none; border-radius: 8px; background: #409eff; color: #fff; cursor: pointer; }
+.book-list { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.book-card { padding: 14px 18px; border: 1px solid #e4e7ed; border-radius: 10px; cursor: pointer; background: #fafbfc; min-width: 200px; flex: 1 1 200px; }
+.book-card.selected { border-color: #409eff; background: #ecf5ff; }
+.book-card-title { font-weight: 600; margin-bottom: 4px; }
+.book-card-meta { color: #888; font-size: 13px; }
+.cover-placeholder { width: 240px; height: 320px; background: linear-gradient(135deg, #819cff, #aac9ff); border-radius: 12px; display: grid; place-items: center; font-size: 80px; color: #fff; }
+.message { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; background: #f0f9eb; color: #67c23a; }
+.message.error { background: #fef0f0; color: #f56c6c; }
 .confirm-button {
   background: #409eff;
   color: #fff;

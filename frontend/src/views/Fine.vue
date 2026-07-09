@@ -43,93 +43,93 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'Fine',
-  data() {
-    return {
-      selectedFineIds: [],
-      fines: [
-        {
-          id: 1,
-          borrowId: 'BR-1001',
-          bookTitle: '《算法导论》',
-          borrowerName: '张三',
-          borrowDate: '2026-05-01',
-          returnDate: '2026-05-21',
-          overdueDays: 5,
-          amount: 25.0,
-          status: '未支付',
-        },
-        {
-          id: 2,
-          borrowId: 'BR-1005',
-          bookTitle: '《JavaScript高级程序设计》',
-          borrowerName: '李四',
-          borrowDate: '2026-04-12',
-          returnDate: '2026-05-10',
-          overdueDays: 3,
-          amount: 15.0,
-          status: '未支付',
-        },
-        {
-          id: 3,
-          borrowId: 'BR-1010',
-          bookTitle: '《机器学习》',
-          borrowerName: '王五',
-          borrowDate: '2026-02-20',
-          returnDate: '2026-03-05',
-          overdueDays: 0,
-          amount: 0.0,
-          status: '已结清',
-        },
-      ],
-    };
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import * as api from '../api/index.js'
+
+const raw = localStorage.getItem('lms_user')
+const userInfo = raw ? JSON.parse(raw) : {}
+const uid = userInfo.user_id
+
+const selectedFineIds = ref([])
+const fines = ref([])
+
+// Fetch fines and merge with borrow records for book titles
+async function fetchFines() {
+  try {
+    const [fineRes, histRes] = await Promise.all([
+      api.getUserFines(uid),
+      api.getBorrowHistory(uid),
+    ])
+    const rawFines = fineRes.data?.fines || []
+    const records = histRes.data?.records || []
+
+    fines.value = rawFines.map(f => {
+      const record = records.find(r => r.record_id === f.record_id) || {}
+      return {
+        id: f.fine_id,
+        record_id: f.record_id,
+        bookTitle: record.book_title || `记录 #${f.record_id}`,
+        borrowerName: userInfo.username,
+        borrowDate: record.borrow_date || '',
+        returnDate: record.return_date || f.create_time,
+        overdueDays: record.overdue_days || '-',
+        amount: f.amount,
+        status: f.status === 'PAID' ? '已结清' : '未支付',
+      }
+    })
+  } catch (e) {
+    console.error('Failed to load fines:', e)
+  }
+}
+
+const hasSelection = computed(() => selectedFineIds.value.length > 0)
+
+const allSelected = computed({
+  get() {
+    const unpaidIds = fines.value.filter(f => f.status !== '已结清').map(f => f.id)
+    return unpaidIds.length > 0 && unpaidIds.every(id => selectedFineIds.value.includes(id))
   },
-  computed: {
-    hasSelection() {
-      return this.selectedFineIds.length > 0;
-    },
-    allSelected: {
-      get() {
-        const unpaidIds = this.fines.filter((f) => f.status !== '已结清').map((f) => f.id);
-        return unpaidIds.length > 0 && unpaidIds.every((id) => this.selectedFineIds.includes(id));
-      },
-      set(value) {
-        if (value) {
-          this.selectedFineIds = this.fines.filter((f) => f.status !== '已结清').map((f) => f.id);
-        } else {
-          this.selectedFineIds = [];
-        }
-      },
-    },
-    selectedCountAmount() {
-      return this.fines
-        .filter((f) => this.selectedFineIds.includes(f.id))
-        .reduce((sum, f) => sum + f.amount, 0)
-        .toFixed(2);
-    },
+  set(value) {
+    if (value) {
+      selectedFineIds.value = fines.value.filter(f => f.status !== '已结清').map(f => f.id)
+    } else {
+      selectedFineIds.value = []
+    }
   },
-  methods: {
-    payFine(id) {
-      const fine = this.fines.find((item) => item.id === id);
-      if (!fine || fine.status === '已结清') return;
-      fine.status = '已结清';
-      this.selectedFineIds = this.selectedFineIds.filter((item) => item !== id);
-    },
-    paySelected() {
-      this.fines.forEach((fine) => {
-        if (this.selectedFineIds.includes(fine.id) && fine.status !== '已结清') {
-          fine.status = '已结清';
-        }
-      });
-      this.selectedFineIds = [];
-    },
-    toggleSelectAll(event) {
-      this.allSelected = event.target.checked;
-    },
-  },
-};
+})
+
+const selectedCountAmount = computed(() =>
+  fines.value
+    .filter(f => selectedFineIds.value.includes(f.id))
+    .reduce((sum, f) => sum + f.amount, 0)
+    .toFixed(2)
+)
+
+async function payFine(id) {
+  try {
+    await api.payFine(id)
+    await fetchFines()
+    selectedFineIds.value = selectedFineIds.value.filter(fid => fid !== id)
+  } catch (e) {
+    console.error('Payment failed:', e)
+  }
+}
+
+async function paySelected() {
+  const ids = [...selectedFineIds.value]
+  for (const id of ids) {
+    try { await api.payFine(id) } catch (e) { console.error(e) }
+  }
+  await fetchFines()
+  selectedFineIds.value = []
+}
+
+function toggleSelectAll(event) {
+  allSelected.value = event.target.checked
+}
+
+onMounted(fetchFines)
 </script>
 
 <style scoped>

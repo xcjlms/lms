@@ -13,7 +13,7 @@
             <div class="name">{{ user.name }}</div>
             <div class="role">读者</div>
           </div>
-          <button class="logout">退出登录</button>
+          <button class="logout" @click="logout">退出登录</button>
         </div>
       </div>
     </header>
@@ -22,7 +22,7 @@
       <aside class="sidebar">
         <nav>
           <ul>
-            <li v-for="item in menu" :key="item">{{ item }}</li>
+            <li v-for="item in menu" :key="item.label" @click="navigate(item.path)">{{ item.label }}</li>
           </ul>
         </nav>
       </aside>
@@ -90,53 +90,92 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import * as api from '../api/index.js'
 
+const router = useRouter()
+
+// 从 localStorage 读取登录用户
+const raw = localStorage.getItem('lms_user')
+const userInfo = raw ? JSON.parse(raw) : { username: '未知', user_id: 0 }
 const user = reactive({
-  name: '张三',
-  avatarText: '张',
+  name: userInfo.username,
+  avatarText: userInfo.username.charAt(0).toUpperCase(),
 })
 
 const menu = [
-  '首页看板',
-  '图书检索',
-  '分类浏览',
-  '我的借阅',
-  '我的罚款',
-  '意见反馈',
-  '个人信息修改'
+  { label: '首页看板', path: '/home/reader' },
+  { label: '图书检索', path: '/borrow' },
+  { label: '我的借阅', path: '/back' },
+  { label: '我的罚款', path: '/fine' },
+  { label: '意见反馈' },
+  { label: '个人信息修改' },
 ]
 
-const hasOverdue = true
-
-const newBooks = [
-  { id: 1, title: '未来简史', author: '尤瓦尔·赫拉利', tag: '新书' },
-  { id: 2, title: '活着', author: '余华', tag: '推荐' },
-  { id: 3, title: '时间简史', author: '史蒂芬·霍金', tag: '热门' }
-]
-
+const hasOverdue = ref(false)
+const newBooks = ref([])
 const stats = reactive({
-  overdueBooks: 1,
-  fines: 35,
-  borrowed: 3,
-  remaining: 2,
-  historyTotal: 18
+  overdueBooks: 0,
+  fines: 0,
+  borrowed: 0,
+  remaining: 5,
+  historyTotal: 0,
 })
-
-const hotBooks = [
-  { id: 11, title: '围城', author: '钱钟书', stock: 7 },
-  { id: 12, title: '三体', author: '刘慈欣', stock: 5 },
-  { id: 13, title: '白夜行', author: '东野圭吾', stock: 6 },
-  { id: 14, title: '百年孤独', author: '加西亚·马尔克斯', stock: 4 },
-  { id: 15, title: '人类简史', author: '尤瓦尔·赫拉利', stock: 8 }
-]
-
+const hotBooks = ref([])
 const categories = [
   { name: '文学', color: '#ff8a80' },
   { name: '科技', color: '#80d8ff' },
   { name: '历史', color: '#ffd180' },
-  { name: '教育', color: '#b9f6ca' }
+  { name: '教育', color: '#b9f6ca' },
 ]
+
+async function fetchData() {
+  try {
+    const uid = userInfo.user_id
+    // 获取图书列表
+    const bookRes = await api.getBooks()
+    const books = bookRes.data?.books || []
+    newBooks.value = books.slice(0, 5).map(b => ({
+      id: b.book_id, title: b.title, author: b.author,
+      tag: b.available_stock > 0 ? '可借' : '已借出',
+    }))
+    hotBooks.value = books.slice(0, 8).map(b => ({
+      id: b.book_id, title: b.title, author: b.author, stock: b.available_stock,
+    }))
+
+    // 获取逾期记录
+    const overdueRes = await api.getOverdueRecords()
+    const overdues = overdueRes.data || []
+    hasOverdue.value = overdues.length > 0
+    stats.overdueBooks = overdues.length
+
+    // 获取罚款
+    const fineRes = await api.getUserFines(uid)
+    const fines = fineRes.data?.fines || []
+    stats.fines = fines.reduce((s, f) => f.status === 'UNPAID' ? s + f.amount : s, 0)
+
+    // 获取借阅历史
+    const histRes = await api.getBorrowHistory(uid)
+    const records = histRes.data?.records || []
+    stats.borrowed = records.filter(r => r.status === 'BORROWED' || r.status === 'OVERDUE').length
+    stats.historyTotal = records.length
+    stats.remaining = Math.max(0, 5 - stats.borrowed)
+  } catch (e) {
+    console.error('Failed to load dashboard:', e)
+  }
+}
+
+function logout() {
+  localStorage.removeItem('lms_user')
+  router.push('/login')
+}
+
+function navigate(path) {
+  if (path) router.push(path)
+}
+
+onMounted(fetchData)
 </script>
 
 <style scoped>
