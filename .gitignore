@@ -24,5 +24,9 @@ vcpkg_installed/
 # Database files (created at runtime)
 *.db
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # macOS
 .DS_Store
