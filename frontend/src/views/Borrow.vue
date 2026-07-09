@@ -5,7 +5,8 @@
       <button @click="searchBooks">搜索</button>
     </div>
     <div v-if="message" :class="['message', message.includes('失败') ? 'error' : '']">{{ message }}</div>
-    <div class="book-list" v-if="books.length > 0">
+
+    <div v-if="books.length > 0" class="book-list">
       <article
         v-for="b in books"
         :key="b.book_id"
@@ -17,10 +18,10 @@
         <div class="book-card-meta">{{ b.author }} · 可借 {{ b.available_stock }}/{{ b.total_stock }}</div>
       </article>
     </div>
-    <div class="empty-state" v-else-if="!keyword && books.length === 0">输入关键词搜索图书</div>
-    <div class="empty-state" v-else-if="keyword && books.length === 0">未找到匹配的图书</div>
+    <div v-if="books.length === 0 && !keyword" class="empty-state">输入关键词搜索图书</div>
+    <div v-if="books.length === 0 && keyword" class="empty-state">未找到匹配的图书</div>
 
-    <div class="detail-card" v-if="selectedBook">
+    <div v-if="selectedBook" class="detail-card">
       <div class="cover-panel">
         <div class="cover-placeholder">{{ selectedBook.title.charAt(0) }}</div>
       </div>
@@ -48,49 +49,10 @@
       </div>
     </div>
 
-    <div class="tab-panel">
-      <div class="tab-header">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          :class="['tab-item', { active: activeTab === tab.key }]"
-          @click="activeTab = tab.key"
-        >
-          {{ tab.label }}
-        </button>
-      </div>
-      <div class="tab-content">
-        <div v-if="activeTab === 'intro'" class="tab-section">
-          <h3>图书简介</h3>
-          <p>{{ book.description }}</p>
-        </div>
-        <div v-else-if="activeTab === 'records'" class="tab-section">
-          <h3>借阅记录</h3>
-          <ul class="record-list">
-            <li v-for="record in borrowRecords" :key="record.id">
-              <div>{{ record.reader }} · {{ record.duration }}天 · {{ record.date }}</div>
-              <div>状态：{{ record.status }}</div>
-            </li>
-          </ul>
-          <div v-if="borrowRecords.length === 0" class="empty-state">暂无借阅记录</div>
-        </div>
-        <div v-else-if="activeTab === 'comments'" class="tab-section">
-          <h3>读者评论反馈</h3>
-          <ul class="comment-list">
-            <li v-for="comment in comments" :key="comment.id">
-              <div class="comment-author">{{ comment.user }}</div>
-              <div class="comment-text">{{ comment.content }}</div>
-            </li>
-          </ul>
-          <div v-if="comments.length === 0" class="empty-state">暂无评论</div>
-        </div>
-      </div>
-    </div>
-
     <div v-if="showDialog" class="dialog-mask" @click.self="closeDialog">
       <div class="dialog-box">
         <h3>确认借阅</h3>
-        <p>请确认是否借阅《{{ book.title }}》</p>
+        <p>请确认是否借阅《{{ selectedBook?.title }}》</p>
         <div class="duration-select">
           <label>借阅时长：</label>
           <select v-model.number="borrowDuration">
