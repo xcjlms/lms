@@ -170,6 +170,20 @@ public:
     bool validateStock(int bookID);
     vector<Book> getInventoryList();
     vector<Book> getLowStockBooks(int threshold = 5);
+    bool addBook(const string& isbn,
+                 const string& title,
+                 const string& author,
+                 const string& publisher,
+                 const string& categoryID,
+                 int totalStock,
+                 const string& location);
+
+    bool editBook(int bookID,
+                  const string& title,
+                  const string& author,
+                  const string& publisher,
+                  const string& categoryID,
+                  const string& location);
 };
 
 // ==================== BorrowManager ====================
