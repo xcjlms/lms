@@ -27,10 +27,6 @@ public:
         ADD_METHOD_TO(ApiController::getBookList,  "/api/books",    Get);
         ADD_METHOD_TO(ApiController::addBook,      "/api/books",    Post);
 
-                // Books
-        ADD_METHOD_TO(ApiController::getBookList,  "/api/books",    Get);
-        ADD_METHOD_TO(ApiController::addBook,      "/api/books",    Post);
-
         // Admin book / inventory / backup
         ADD_METHOD_TO(ApiController::editBook,        "/api/books/{1}",                  Put);
         ADD_METHOD_TO(ApiController::deleteBook,      "/api/books/{1}",                  Delete);
