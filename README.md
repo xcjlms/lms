@@ -14,7 +14,8 @@
 
 ## 技术栈
 
-- **语言**: C++17
+- **后端语言**: C++17
+- **前端框架**: Vue 3 + Vite
 - **数据库**: SQLite3
 - **Web 框架**: Drogon 1.9
 - **构建工具**: CMake + vcpkg
@@ -58,6 +59,44 @@ cmake --build build
 ```
 
 服务器启动后监听 `http://0.0.0.0:8080`。
+
+## 前端开发
+
+### 环境要求
+
+- [Node.js](https://nodejs.org/) ≥ 18
+
+### 安装依赖
+
+```bash
+cd frontend
+npm install
+```
+
+### 启动开发服务器（热更新）
+
+```bash
+cd frontend
+npm run dev
+```
+
+浏览器打开 `http://localhost:3000`，修改代码后页面自动刷新。
+
+Vite 已配置代理，前端发往 `/api/*` 的请求会自动转发到后端 `http://localhost:8080`。
+
+> 注意：前端依赖后端 API，启动前端前请先启动后端服务器：
+> ```bash
+> ./build/Debug/LibrarySystem.exe
+> ```
+
+### 生产构建
+
+```bash
+cd frontend
+npm run build
+```
+
+构建产物输出到 `frontend/dist/`，可部署到任意静态服务器。
 
 ## API 文档
 
@@ -160,13 +199,27 @@ curl -X POST http://localhost:8080/api/fines/pay \
 
 ```
 lms/
-├── CMakeLists.txt              # CMake 构建配置
-├── vcpkg.json                  # vcpkg 依赖清单
-├── main.cpp                    # 服务入口
-├── LibrarySystem.h             # 核心类声明
-├── LibrarySystem.c             # 核心业务逻辑
+├── CMakeLists.txt                  # CMake 构建配置
+├── vcpkg.json                      # vcpkg 依赖清单
+├── main.cpp                        # 后端服务入口
+├── LibrarySystem.h                 # 核心类声明
+├── LibrarySystem.c                 # 核心业务逻辑
 ├── controllers/
-│   ├── ApiController.h         # REST API 控制器
-│   └── ApiController.cpp       # API 实现
-└── README.md
+│   ├── ApiController.h             # REST API 控制器
+│   └── ApiController.cpp           # API 实现
+├── frontend/                       # Vue 前端
+│   ├── index.html                  # 入口 HTML
+│   ├── vite.config.js              # Vite 配置（含 API 代理）
+│   ├── package.json                # 前端依赖
+│   └── src/
+│       ├── main.js                 # Vue 启动入口
+│       ├── App.vue                 # 根组件
+│       └── components/
+│           ├── Login.vue           # 登录页
+│           ├── Home_admin.vue      # 管理员首页
+│           ├── Home_reader.vue     # 读者首页
+│           ├── Borrow.vue          # 借书
+│           ├── Back.vue            # 还书
+│           └── Fine.vue            # 罚款
+├── README.md
 ```
