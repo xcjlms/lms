@@ -186,7 +186,10 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import * as api from '../api/index.js'
 
+const router = useRouter()
 const activeTab = ref('login')
 const loginForm = reactive({
   username: '',
@@ -319,46 +322,45 @@ const validateRegister = () => {
   )
 }
 
-const submitLogin = () => {
+const submitLogin = async () => {
   loginError.value = ''
   infoMessage.value = ''
-  if (!validateLogin()) {
-    return
-  }
-  const username = loginForm.username.trim()
-  const password = loginForm.password
-  const role = loginForm.role
-  const validAdmin = username === 'admin' && password === 'admin' && role === 'admin'
-  const validReader = username === 'reader' && password === 'reader' && role === 'reader'
+  if (!validateLogin()) return
 
-  if (validAdmin || validReader) {
+  try {
+    const res = await api.login(loginForm.username.trim(), loginForm.password)
+    const user = res.data || { user_id: res.user_id, role: loginForm.role, username: loginForm.username.trim() }
+    localStorage.setItem('lms_user', JSON.stringify(user))
     infoMessage.value = '登录成功，欢迎回来！'
-  } else {
-    loginError.value = '登录失败：用户名或密码不正确'
+    setTimeout(() => {
+      router.push(user.role === 'admin' ? '/home/admin' : '/home/reader')
+    }, 600)
+  } catch (e) {
+    loginError.value = e.message || '登录失败'
   }
 }
 
-const submitRegister = () => {
+const submitRegister = async () => {
   infoMessage.value = ''
   loginError.value = ''
-  if (!validateRegister()) {
-    return
+  if (!validateRegister()) return
+
+  try {
+    await api.register(registerForm.username.trim(), registerForm.password, 'READER')
+    const savedUsername = registerForm.username.trim()
+    resetRegisterErrors()
+    registerForm.username = ''
+    registerForm.email = ''
+    registerForm.phone = ''
+    registerForm.password = ''
+    registerForm.confirmPassword = ''
+    showRegPassword.value = false
+    showRegConfirmPassword.value = false
+    activeTab.value = 'login'
+    infoMessage.value = `注册成功，用户 ${savedUsername} 已创建，请登录`
+  } catch (e) {
+    registerErrors.username = e.message || '注册失败'
   }
-  if (registerForm.username.trim().toLowerCase() === 'admin') {
-    registerErrors.username = '用户名已存在'
-    return
-  }
-  const savedUsername = registerForm.username.trim()
-  resetRegisterErrors()
-  registerForm.username = ''
-  registerForm.email = ''
-  registerForm.phone = ''
-  registerForm.password = ''
-  registerForm.confirmPassword = ''
-  showRegPassword.value = false
-  showRegConfirmPassword.value = false
-  activeTab.value = 'login'
-  infoMessage.value = `注册成功，用户 ${savedUsername} 已创建，请登录` 
 }
 
 watch(activeTab, () => {

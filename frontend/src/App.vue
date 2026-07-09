@@ -1,11 +1,3 @@
 <template>
-  <Library />
+  <router-view />
 </template>
-
-<script>
-import Library from './components/Login.vue'
-
-export default {
-  components: { Library }
-}
-</script>
