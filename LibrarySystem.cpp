@@ -1,4 +1,4 @@
-// LibrarySystem.c -- Library Management System implementation
+// LibrarySystem.cpp -- Library Management System implementation
 // Core logic: borrow/return books, overdue reminders, fine calculation & payment
 // Other business methods are left as stubs (returning defaults)
 #include "LibrarySystem.h"
