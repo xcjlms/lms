@@ -1,6 +1,7 @@
 #include "ApiController.h"
 #include <iostream>
 #include <json/json.h>
+#include <cstdlib>
 
 using namespace std;
 
@@ -362,6 +363,31 @@ void ApiController::getBorrowHistory(const HttpRequestPtr& req,
         callback(jsonResponse(false, "SQL error"));
         return;
     }
+    Json::Value records(Json::arrayValue);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Json::Value rec;
+        rec["record_id"]   = sqlite3_column_int(stmt, 0);
+        rec["book_id"]     = sqlite3_column_int(stmt, 1);
+        rec["user_id"]     = sqlite3_column_int(stmt, 2);
+        rec["borrow_date"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        rec["due_date"]    = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        if (sqlite3_column_type(stmt, 5) != SQLITE_NULL)
+            rec["return_date"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        else
+            rec["return_date"] = Json::nullValue;
+        rec["status"]      = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+        rec["book_title"]  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7));
+        rec["isbn"]        = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
+        records.append(rec);
+    }
+
+    sqlite3_finalize(stmt);
+
+    Json::Value data;
+    data["records"] = records;
+    data["count"] = records.size();
+    callback(jsonResponse(true, "OK", data));
+}
 
 // ============================================================
 // PUT /api/books/{book_id}
@@ -647,29 +673,4 @@ void ApiController::restoreData(const HttpRequestPtr& req,
     } else {
         callback(jsonResponse(false, "Failed to restore database"));
     }
-}
-
-    Json::Value records(Json::arrayValue);
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        Json::Value rec;
-        rec["record_id"]   = sqlite3_column_int(stmt, 0);
-        rec["book_id"]     = sqlite3_column_int(stmt, 1);
-        rec["user_id"]     = sqlite3_column_int(stmt, 2);
-        rec["borrow_date"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-        rec["due_date"]    = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
-        if (sqlite3_column_type(stmt, 5) != SQLITE_NULL)
-            rec["return_date"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-        else
-            rec["return_date"] = Json::nullValue;
-        rec["status"]      = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
-        rec["book_title"]  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7));
-        rec["isbn"]        = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
-        records.append(rec);
-    }
-    sqlite3_finalize(stmt);
-
-    Json::Value data;
-    data["records"] = records;
-    data["count"] = records.size();
-    callback(jsonResponse(true, "OK", data));
 }
