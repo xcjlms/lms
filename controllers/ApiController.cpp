@@ -38,6 +38,111 @@ HttpResponsePtr ApiController::badRequest(const string& reason) {
 }
 
 // ============================================================
+// POST /api/login
+// Body: { "username": "alice", "password": "xxx" }
+// ============================================================
+void ApiController::login(const HttpRequestPtr& req,
+                           function<void(const HttpResponsePtr&)>&& callback) {
+    auto json = req->getJsonObject();
+    if (!json || !(*json)["username"].isString() || !(*json)["password"].isString()) {
+        callback(badRequest("Requires username and password"));
+        return;
+    }
+
+    string username = (*json)["username"].asString();
+    string password = (*json)["password"].asString();
+
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+    if (!db) {
+        callback(jsonResponse(false, "Database not connected"));
+        return;
+    }
+
+    // Escape username
+    string safeUser;
+    for (char c : username) { if (c == '\'') safeUser += "''"; else safeUser += c; }
+
+    string sql = "SELECT user_id, username, role, status, password_hash "
+                 "FROM users WHERE username = '" + safeUser + "'";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        callback(jsonResponse(false, "Database error"));
+        return;
+    }
+
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
+        callback(jsonResponse(false, "User not found"));
+        return;
+    }
+
+    int    userId   = sqlite3_column_int(stmt, 0);
+    string uname    = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+    string role     = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+    string status   = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+    string hash     = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+    sqlite3_finalize(stmt);
+
+    if (status != "ACTIVE") {
+        callback(jsonResponse(false, "Account is suspended"));
+        return;
+    }
+
+    // Simple password check (plaintext for now — upgrade to hashed later)
+    if (password != hash) {
+        callback(jsonResponse(false, "Incorrect password"));
+        return;
+    }
+
+    Json::Value data;
+    data["user_id"]  = userId;
+    data["username"] = uname;
+    data["role"]     = role;
+    callback(jsonResponse(true, "Login successful", data));
+}
+
+// ============================================================
+// POST /api/register
+// Body: { "username": "newuser", "password": "xxx", "role": "READER" }
+// ============================================================
+void ApiController::reg(const HttpRequestPtr& req,
+                         function<void(const HttpResponsePtr&)>&& callback) {
+    auto json = req->getJsonObject();
+    if (!json || !(*json)["username"].isString() || !(*json)["password"].isString()) {
+        callback(badRequest("Requires username and password"));
+        return;
+    }
+
+    string username = (*json)["username"].asString();
+    string password = (*json)["password"].asString();
+    string role     = json->get("role", "READER").asString();
+
+    if (role != "READER" && role != "MANAGER") {
+        callback(badRequest("Role must be READER or MANAGER"));
+        return;
+    }
+
+    // Escape single quotes
+    auto esc = [](const string& s) -> string {
+        string out; for (char c : s) { if (c == '\'') out += "''"; else out += c; }
+        return out;
+    };
+
+    string sql = "INSERT INTO users (username, password_hash, role, status) VALUES ('" +
+                 esc(username) + "', '" + esc(password) + "', '" + role + "', 'ACTIVE')";
+
+    if (DatabaseManager::getInstance().execSQL(sql)) {
+        Json::Value data;
+        data["username"] = username;
+        data["role"] = role;
+        callback(jsonResponse(true, "User registered successfully", data));
+    } else {
+        callback(jsonResponse(false, "Registration failed — username may already exist"));
+    }
+}
+
+// ============================================================
 // POST /api/borrow
 // Body: { "user_id": 2, "book_id": 1 }
 // ============================================================

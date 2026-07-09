@@ -20,15 +20,12 @@ find_package(Drogon CONFIG REQUIRED)
 # ========== Source files ==========
 set(SOURCES
     main.cpp
-    LibrarySystem.c
+    LibrarySystem.cpp
     controllers/ApiController.cpp
 )
 
 # ========== Executable ==========
 add_executable(LibrarySystem ${SOURCES})
-
-# LibrarySystem.c uses C++ features despite .c extension
-set_source_files_properties(LibrarySystem.c PROPERTIES LANGUAGE CXX)
 
 # ========== Link libraries ==========
 target_link_libraries(LibrarySystem PRIVATE

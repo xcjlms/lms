@@ -27,6 +27,10 @@ public:
         ADD_METHOD_TO(ApiController::getBookList,  "/api/books",    Get);
         ADD_METHOD_TO(ApiController::addBook,      "/api/books",    Post);
 
+        // Auth
+        ADD_METHOD_TO(ApiController::login,    "/api/login",    Post);
+        ADD_METHOD_TO(ApiController::reg,      "/api/register", Post);
+
         // Admin book / inventory / backup
         ADD_METHOD_TO(ApiController::editBook,        "/api/books/{1}",                  Put);
         ADD_METHOD_TO(ApiController::deleteBook,      "/api/books/{1}",                  Delete);
@@ -40,6 +44,12 @@ public:
         // Borrow history
         ADD_METHOD_TO(ApiController::getBorrowHistory, "/api/records", Get);
     METHOD_LIST_END
+
+    // ----- Auth -----
+    void login(const HttpRequestPtr& req,
+               std::function<void(const HttpResponsePtr&)>&& callback);
+    void reg(const HttpRequestPtr& req,
+             std::function<void(const HttpResponsePtr&)>&& callback);
 
     // ----- Borrow / Return -----
     void borrowBook(const HttpRequestPtr& req,

@@ -20,11 +20,11 @@ int main() {
 
     // 2. Insert test data if not exists
     db.execSQL("INSERT OR IGNORE INTO users (user_id, username, password_hash, role, status) "
-               "VALUES (1, 'admin', 'hashed_pwd', 'MANAGER', 'ACTIVE')");
+               "VALUES (1, 'admin', 'admin', 'MANAGER', 'ACTIVE')");
     db.execSQL("INSERT OR IGNORE INTO users (user_id, username, password_hash, role, status) "
-               "VALUES (2, 'alice', 'hashed_pwd', 'READER', 'ACTIVE')");
+               "VALUES (2, 'alice', '123456', 'READER', 'ACTIVE')");
     db.execSQL("INSERT OR IGNORE INTO users (user_id, username, password_hash, role, status) "
-               "VALUES (3, 'bob',   'hashed_pwd', 'READER', 'ACTIVE')");
+               "VALUES (3, 'bob',   '123456', 'READER', 'ACTIVE')");
 
     db.execSQL("INSERT OR IGNORE INTO books (book_id, isbn, title, author, publisher, "
                "total_stock, available_stock, location, status) "
