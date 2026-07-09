@@ -284,52 +284,51 @@ void ApiController::getBookList(const HttpRequestPtr& req,
 
 // ============================================================
 // POST /api/books
-// Body: { "isbn": "...", "title": "...", "author": "...", ... }
+// Body:
+// {
+//   "isbn": "978-xxx",
+//   "title": "Book Title",
+//   "author": "Author",
+//   "publisher": "Publisher",
+//   "category_id": "CS",
+//   "total_stock": 5,
+//   "location": "A-01"
+// }
 // ============================================================
 void ApiController::addBook(const HttpRequestPtr& req,
-                             function<void(const HttpResponsePtr&)>&& callback) {
+                            function<void(const HttpResponsePtr&)>&& callback) {
+    Json::Value emptyData;
     auto json = req->getJsonObject();
-    if (!json || !(*json)["title"].isString() || !(*json)["author"].isString()) {
-        callback(badRequest("Requires JSON body with title and author at minimum"));
+
+    if (!json) {
+        callback(badRequest("Requires JSON body"));
         return;
     }
 
-    sqlite3* db = DatabaseManager::getInstance().getConnection();
-    if (!db) {
-        callback(jsonResponse(false, "Database not connected"));
+    if (!(*json)["isbn"].isString() ||
+        !(*json)["title"].isString() ||
+        !(*json)["author"].isString() ||
+        !(*json)["total_stock"].isInt()) {
+        callback(badRequest("Requires isbn, title, author and total_stock"));
         return;
     }
 
-    string isbn    = json->get("isbn", "").asString();
-    string title   = (*json)["title"].asString();
-    string author  = (*json)["author"].asString();
-    string pub     = json->get("publisher", "").asString();
-    string cat     = json->get("category_id", "").asString();
-    string loc     = json->get("location", "").asString();
-    int stock      = json->get("total_stock", 1).asInt();
+    string isbn = (*json)["isbn"].asString();
+    string title = (*json)["title"].asString();
+    string author = (*json)["author"].asString();
+    string publisher = (*json).isMember("publisher") ? (*json)["publisher"].asString() : "";
+    string categoryID = (*json).isMember("category_id") ? (*json)["category_id"].asString() : "";
+    string location = (*json).isMember("location") ? (*json)["location"].asString() : "";
+    int totalStock = (*json)["total_stock"].asInt();
 
-    // Escape single quotes for SQL
-    auto esc = [](const string& s) -> string {
-        string out;
-        for (char c : s) { if (c == '\'') out += "''"; else out += c; }
-        return out;
-    };
+    InventoryManager manager;
+    bool ok = manager.addBook(isbn, title, author, publisher, categoryID, totalStock, location);
 
-    string sql = "INSERT INTO books (isbn, title, author, publisher, category_id, "
-                 "total_stock, available_stock, location, status) VALUES ('" +
-                 esc(isbn) + "', '" + esc(title) + "', '" + esc(author) + "', '" +
-                 esc(pub) + "', '" + esc(cat) + "', " + to_string(stock) + ", " +
-                 to_string(stock) + ", '" + esc(loc) + "', 'NORMAL')";
-
-    bool ok = DatabaseManager::getInstance().execSQL(sql);
-
-    Json::Value data;
-    data["title"] = title;
-    data["author"] = author;
-    if (ok)
-        callback(jsonResponse(true, "Book added successfully", data));
-    else
+    if (ok) {
+        callback(jsonResponse(true, "Book added successfully"));
+    } else {
         callback(jsonResponse(false, "Failed to add book"));
+    }
 }
 
 // ============================================================
@@ -363,6 +362,292 @@ void ApiController::getBorrowHistory(const HttpRequestPtr& req,
         callback(jsonResponse(false, "SQL error"));
         return;
     }
+
+// ============================================================
+// PUT /api/books/{book_id}
+// Body:
+// {
+//   "title": "New Title",
+//   "author": "New Author",
+//   "publisher": "New Publisher",
+//   "category_id": "CS",
+//   "location": "A-02"
+// }
+// ============================================================
+void ApiController::editBook(const HttpRequestPtr& req,
+                             function<void(const HttpResponsePtr&)>&& callback,
+                             int bookID) {
+    auto json = req->getJsonObject();
+
+    if (!json) {
+        callback(badRequest("Requires JSON body"));
+        return;
+    }
+
+    if (!(*json)["title"].isString() ||
+        !(*json)["author"].isString()) {
+        callback(badRequest("Requires title and author"));
+        return;
+    }
+
+    string title = (*json)["title"].asString();
+    string author = (*json)["author"].asString();
+    string publisher = (*json).isMember("publisher") ? (*json)["publisher"].asString() : "";
+    string categoryID = (*json).isMember("category_id") ? (*json)["category_id"].asString() : "";
+    string location = (*json).isMember("location") ? (*json)["location"].asString() : "";
+
+    InventoryManager manager;
+    bool ok = manager.editBook(bookID, title, author, publisher, categoryID, location);
+
+    if (ok) {
+        callback(jsonResponse(true, "Book edited successfully"));
+    } else {
+        callback(jsonResponse(false, "Failed to edit book"));
+    }
+}
+
+// ============================================================
+// DELETE /api/books/{book_id}
+// ============================================================
+void ApiController::deleteBook(const HttpRequestPtr& req,
+                               function<void(const HttpResponsePtr&)>&& callback,
+                               int bookID) {
+    InventoryManager manager;
+    bool ok = manager.deleteBook(bookID);
+
+    if (ok) {
+        callback(jsonResponse(true, "Book deleted successfully"));
+    } else {
+        callback(jsonResponse(false, "Failed to delete book. It may have active borrow records."));
+    }
+}
+
+// ============================================================
+// POST /api/books/{book_id}/stock/increase
+// Body: { "quantity": 3 }
+// ============================================================
+void ApiController::increaseStock(const HttpRequestPtr& req,
+                                  function<void(const HttpResponsePtr&)>&& callback,
+                                  int bookID) {
+    auto json = req->getJsonObject();
+
+    if (!json || !(*json)["quantity"].isInt()) {
+        callback(badRequest("Requires JSON body with quantity"));
+        return;
+    }
+
+    int quantity = (*json)["quantity"].asInt();
+
+    InventoryManager manager;
+    bool ok = manager.increaseStock(bookID, quantity);
+
+    if (ok) {
+        callback(jsonResponse(true, "Stock increased successfully"));
+    } else {
+        callback(jsonResponse(false, "Failed to increase stock"));
+    }
+}
+
+// ============================================================
+// POST /api/books/{book_id}/stock/decrease
+// Body: { "quantity": 2 }
+// ============================================================
+void ApiController::decreaseStock(const HttpRequestPtr& req,
+                                  function<void(const HttpResponsePtr&)>&& callback,
+                                  int bookID) {
+    auto json = req->getJsonObject();
+
+    if (!json || !(*json)["quantity"].isInt()) {
+        callback(badRequest("Requires JSON body with quantity"));
+        return;
+    }
+
+    int quantity = (*json)["quantity"].asInt();
+
+    InventoryManager manager;
+    bool ok = manager.decreaseStock(bookID, quantity);
+
+    if (ok) {
+        callback(jsonResponse(true, "Stock decreased successfully"));
+    } else {
+        callback(jsonResponse(false, "Failed to decrease stock"));
+    }
+}
+
+// ============================================================
+// GET /api/inventory
+// ============================================================
+void ApiController::getInventory(const HttpRequestPtr& req,
+                                 function<void(const HttpResponsePtr&)>&& callback) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        callback(jsonResponse(false, "Database not connected"));
+        return;
+    }
+
+    string sql =
+        "SELECT book_id, isbn, title, author, publisher, category_id, "
+        "total_stock, available_stock, location, status "
+        "FROM books WHERE status != 'DELETED' "
+        "ORDER BY book_id ASC";
+
+    sqlite3_stmt* stmt = NULL;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+        callback(jsonResponse(false, "SQL error"));
+        return;
+    }
+
+    Json::Value books(Json::arrayValue);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Json::Value book;
+
+        book["book_id"] = sqlite3_column_int(stmt, 0);
+        book["isbn"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        book["title"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        book["author"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        book["publisher"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        book["category_id"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        book["total_stock"] = sqlite3_column_int(stmt, 6);
+        book["available_stock"] = sqlite3_column_int(stmt, 7);
+        book["borrowed_count"] = sqlite3_column_int(stmt, 6) - sqlite3_column_int(stmt, 7);
+        book["location"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
+        book["status"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
+
+        books.append(book);
+    }
+
+    sqlite3_finalize(stmt);
+
+    Json::Value data;
+    data["books"] = books;
+    data["count"] = books.size();
+
+    callback(jsonResponse(true, "OK", data));
+}
+
+// ============================================================
+// GET /api/inventory/low?threshold=2
+// ============================================================
+void ApiController::getLowStockBooks(const HttpRequestPtr& req,
+                                     function<void(const HttpResponsePtr&)>&& callback) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        callback(jsonResponse(false, "Database not connected"));
+        return;
+    }
+
+    auto params = req->getParameters();
+
+    int threshold = 5;
+
+    if (params.count("threshold")) {
+        threshold = atoi(params["threshold"].c_str());
+    }
+
+    string sql =
+        "SELECT book_id, isbn, title, author, publisher, category_id, "
+        "total_stock, available_stock, location, status "
+        "FROM books "
+        "WHERE status != 'DELETED' AND available_stock <= " + to_string(threshold) +
+        " ORDER BY available_stock ASC";
+
+    sqlite3_stmt* stmt = NULL;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+        callback(jsonResponse(false, "SQL error"));
+        return;
+    }
+
+    Json::Value books(Json::arrayValue);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Json::Value book;
+
+        book["book_id"] = sqlite3_column_int(stmt, 0);
+        book["isbn"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        book["title"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        book["author"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        book["publisher"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        book["category_id"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        book["total_stock"] = sqlite3_column_int(stmt, 6);
+        book["available_stock"] = sqlite3_column_int(stmt, 7);
+        book["borrowed_count"] = sqlite3_column_int(stmt, 6) - sqlite3_column_int(stmt, 7);
+        book["location"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
+        book["status"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
+
+        books.append(book);
+    }
+
+    sqlite3_finalize(stmt);
+
+    Json::Value data;
+    data["threshold"] = threshold;
+    data["books"] = books;
+    data["count"] = books.size();
+
+    callback(jsonResponse(true, "OK", data));
+}
+
+// ============================================================
+// POST /api/backup
+// Body optional: { "backup_path": "library_backup.db" }
+// ============================================================
+void ApiController::backupData(const HttpRequestPtr& req,
+                               function<void(const HttpResponsePtr&)>&& callback) {
+    auto json = req->getJsonObject();
+
+    string backupPath = "";
+
+    if (json && (*json).isMember("backup_path") && (*json)["backup_path"].isString()) {
+        backupPath = (*json)["backup_path"].asString();
+    }
+
+    BackupManager manager;
+
+    if (backupPath.empty()) {
+        backupPath = manager.generateBackupFileName();
+    }
+
+    bool ok = manager.backupData(backupPath);
+
+    Json::Value data;
+    data["backup_path"] = backupPath;
+
+    if (ok) {
+        callback(jsonResponse(true, "Backup created successfully", data));
+    } else {
+        callback(jsonResponse(false, "Failed to create backup", data));
+    }
+}
+
+// ============================================================
+// POST /api/restore
+// Body: { "backup_path": "library_backup_20260709_085200.db" }
+// ============================================================
+void ApiController::restoreData(const HttpRequestPtr& req,
+                                function<void(const HttpResponsePtr&)>&& callback) {
+    auto json = req->getJsonObject();
+
+    if (!json || !(*json)["backup_path"].isString()) {
+        callback(badRequest("Requires JSON body with backup_path"));
+        return;
+    }
+
+    string backupPath = (*json)["backup_path"].asString();
+
+    BackupManager manager;
+    bool ok = manager.restoreData(backupPath);
+
+    if (ok) {
+        callback(jsonResponse(true, "Database restored successfully"));
+    } else {
+        callback(jsonResponse(false, "Failed to restore database"));
+    }
+}
 
     Json::Value records(Json::arrayValue);
     while (sqlite3_step(stmt) == SQLITE_ROW) {
