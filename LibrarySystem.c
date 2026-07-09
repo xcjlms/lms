@@ -6,6 +6,8 @@
 #include <cstring>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
+#include <cstdio>
 
 using namespace std;
 
@@ -232,46 +234,530 @@ bool UserManager::changePassword(User* user, const string& oldPwd, const string&
 }
 
 // ============================================================
-// InventoryManager stubs
+// InventoryManager implementation
 // ============================================================
+
+static string escapeSQLString(const string& value) {
+    string result;
+    int i;
+
+    for (i = 0; i < (int)value.length(); i++) {
+        if (value[i] == '\'') {
+            result += "''";
+        } else {
+            result += value[i];
+        }
+    }
+
+    return result;
+}
+
 bool InventoryManager::addBook(const Book& book) {
-    // TODO: add book
+    // 当前 Book 类缺少完整 setter，外部难以构造完整 Book。
+    // 该函数保留是为了兼容原接口，实际 API 使用下面的重载 addBook。
     return false;
+}
+
+bool InventoryManager::addBook(const string& isbn,
+                               const string& title,
+                               const string& author,
+                               const string& publisher,
+                               const string& categoryID,
+                               int totalStock,
+                               const string& location) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        cerr << "[Inventory] Database not connected." << endl;
+        return false;
+    }
+
+    if (isbn.empty() || title.empty() || author.empty()) {
+        cerr << "[Inventory] ISBN, title and author cannot be empty." << endl;
+        return false;
+    }
+
+    if (totalStock < 0) {
+        cerr << "[Inventory] Total stock cannot be negative." << endl;
+        return false;
+    }
+
+    // 检查 ISBN 是否重复。因为当前建表语句里 isbn 没有 UNIQUE，所以这里手动检查。
+    {
+        string sql = "SELECT COUNT(*) FROM books WHERE isbn = '" +
+                     escapeSQLString(isbn) +
+                     "' AND status != 'DELETED'";
+
+        sqlite3_stmt* stmt = NULL;
+
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+            cerr << "[Inventory] Failed to check ISBN." << endl;
+            return false;
+        }
+
+        int count = 0;
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+
+        sqlite3_finalize(stmt);
+
+        if (count > 0) {
+            cerr << "[Inventory] ISBN already exists." << endl;
+            return false;
+        }
+    }
+
+    string sqlInsert =
+        "INSERT INTO books "
+        "(isbn, title, author, publisher, category_id, total_stock, available_stock, location, status) "
+        "VALUES ('" +
+        escapeSQLString(isbn) + "', '" +
+        escapeSQLString(title) + "', '" +
+        escapeSQLString(author) + "', '" +
+        escapeSQLString(publisher) + "', '" +
+        escapeSQLString(categoryID) + "', " +
+        to_string(totalStock) + ", " +
+        to_string(totalStock) + ", '" +
+        escapeSQLString(location) + "', 'NORMAL')";
+
+    if (!DatabaseManager::getInstance().execSQL(sqlInsert)) {
+        cerr << "[Inventory] Failed to add book." << endl;
+        return false;
+    }
+
+    cout << "[Inventory] Book added successfully: " << title << endl;
+    return true;
 }
 
 bool InventoryManager::editBook(int bookID, const Book& newInfo) {
-    // TODO: edit book info
+    // 当前 Book 类缺少完整 getter/setter，保留原接口兼容。
     return false;
+}
+
+bool InventoryManager::editBook(int bookID,
+                                const string& title,
+                                const string& author,
+                                const string& publisher,
+                                const string& categoryID,
+                                const string& location) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        cerr << "[Inventory] Database not connected." << endl;
+        return false;
+    }
+
+    if (bookID <= 0) {
+        cerr << "[Inventory] Invalid book ID." << endl;
+        return false;
+    }
+
+    if (title.empty() || author.empty()) {
+        cerr << "[Inventory] Title and author cannot be empty." << endl;
+        return false;
+    }
+
+    // 检查图书是否存在且未删除
+    {
+        string sql = "SELECT COUNT(*) FROM books WHERE book_id = " +
+                     to_string(bookID) +
+                     " AND status != 'DELETED'";
+
+        sqlite3_stmt* stmt = NULL;
+
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+            cerr << "[Inventory] Failed to check book." << endl;
+            return false;
+        }
+
+        int count = 0;
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+
+        sqlite3_finalize(stmt);
+
+        if (count == 0) {
+            cerr << "[Inventory] Book not found or deleted." << endl;
+            return false;
+        }
+    }
+
+    string sqlUpdate =
+        "UPDATE books SET "
+        "title = '" + escapeSQLString(title) + "', "
+        "author = '" + escapeSQLString(author) + "', "
+        "publisher = '" + escapeSQLString(publisher) + "', "
+        "category_id = '" + escapeSQLString(categoryID) + "', "
+        "location = '" + escapeSQLString(location) + "' "
+        "WHERE book_id = " + to_string(bookID) +
+        " AND status != 'DELETED'";
+
+    if (!DatabaseManager::getInstance().execSQL(sqlUpdate)) {
+        cerr << "[Inventory] Failed to edit book." << endl;
+        return false;
+    }
+
+    cout << "[Inventory] Book edited successfully. ID=" << bookID << endl;
+    return true;
 }
 
 bool InventoryManager::deleteBook(int bookID) {
-    // TODO: delete book
-    return false;
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        cerr << "[Inventory] Database not connected." << endl;
+        return false;
+    }
+
+    if (bookID <= 0) {
+        cerr << "[Inventory] Invalid book ID." << endl;
+        return false;
+    }
+
+    sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, NULL);
+
+    // 检查是否存在未归还记录
+    {
+        string sql = "SELECT COUNT(*) FROM borrow_records "
+                     "WHERE book_id = " + to_string(bookID) +
+                     " AND status IN ('BORROWED','OVERDUE')";
+
+        sqlite3_stmt* stmt = NULL;
+
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+            sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
+            cerr << "[Inventory] Failed to check borrow records." << endl;
+            return false;
+        }
+
+        int count = 0;
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+
+        sqlite3_finalize(stmt);
+
+        if (count > 0) {
+            sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
+            cerr << "[Inventory] Cannot delete book with active borrow records." << endl;
+            return false;
+        }
+    }
+
+    // 软删除：标记为 DELETED，同时库存清零
+    string sqlDelete =
+        "UPDATE books SET "
+        "status = 'DELETED', "
+        "available_stock = 0, "
+        "total_stock = 0 "
+        "WHERE book_id = " + to_string(bookID) +
+        " AND status != 'DELETED'";
+
+    if (!DatabaseManager::getInstance().execSQL(sqlDelete)) {
+        sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
+        cerr << "[Inventory] Failed to delete book." << endl;
+        return false;
+    }
+
+    sqlite3_exec(db, "COMMIT", NULL, NULL, NULL);
+
+    cout << "[Inventory] Book deleted successfully. ID=" << bookID << endl;
+    return true;
 }
 
 bool InventoryManager::increaseStock(int bookID, int quantity) {
-    // TODO: increase stock
-    return false;
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        cerr << "[Inventory] Database not connected." << endl;
+        return false;
+    }
+
+    if (bookID <= 0 || quantity <= 0) {
+        cerr << "[Inventory] Invalid book ID or quantity." << endl;
+        return false;
+    }
+
+    string sql =
+        "UPDATE books SET "
+        "total_stock = total_stock + " + to_string(quantity) + ", "
+        "available_stock = available_stock + " + to_string(quantity) + " "
+        "WHERE book_id = " + to_string(bookID) +
+        " AND status != 'DELETED'";
+
+    if (!DatabaseManager::getInstance().execSQL(sql)) {
+        cerr << "[Inventory] Failed to increase stock." << endl;
+        return false;
+    }
+
+    return validateStock(bookID);
 }
 
 bool InventoryManager::decreaseStock(int bookID, int quantity) {
-    // TODO: decrease stock
-    return false;
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        cerr << "[Inventory] Database not connected." << endl;
+        return false;
+    }
+
+    if (bookID <= 0 || quantity <= 0) {
+        cerr << "[Inventory] Invalid book ID or quantity." << endl;
+        return false;
+    }
+
+    int totalStock = 0;
+    int availableStock = 0;
+
+    // 查询当前库存
+    {
+        string sql = "SELECT total_stock, available_stock FROM books "
+                     "WHERE book_id = " + to_string(bookID) +
+                     " AND status != 'DELETED'";
+
+        sqlite3_stmt* stmt = NULL;
+
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+            cerr << "[Inventory] Failed to query stock." << endl;
+            return false;
+        }
+
+        if (sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt);
+            cerr << "[Inventory] Book not found." << endl;
+            return false;
+        }
+
+        totalStock = sqlite3_column_int(stmt, 0);
+        availableStock = sqlite3_column_int(stmt, 1);
+
+        sqlite3_finalize(stmt);
+    }
+
+    int borrowedCount = totalStock - availableStock;
+
+    if (totalStock - quantity < borrowedCount) {
+        cerr << "[Inventory] Cannot decrease stock: total stock would be less than borrowed count." << endl;
+        return false;
+    }
+
+    if (availableStock - quantity < 0) {
+        cerr << "[Inventory] Cannot decrease stock: available stock is not enough." << endl;
+        return false;
+    }
+
+    string sqlUpdate =
+        "UPDATE books SET "
+        "total_stock = total_stock - " + to_string(quantity) + ", "
+        "available_stock = available_stock - " + to_string(quantity) + " "
+        "WHERE book_id = " + to_string(bookID) +
+        " AND status != 'DELETED'";
+
+    if (!DatabaseManager::getInstance().execSQL(sqlUpdate)) {
+        cerr << "[Inventory] Failed to decrease stock." << endl;
+        return false;
+    }
+
+    return validateStock(bookID);
 }
 
 bool InventoryManager::validateStock(int bookID) {
-    // TODO: validate stock
-    return false;
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+
+    if (!db) {
+        return false;
+    }
+
+    string sql = "SELECT total_stock, available_stock FROM books WHERE book_id = " +
+                 to_string(bookID);
+
+    sqlite3_stmt* stmt = NULL;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK) {
+        return false;
+    }
+
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    int totalStock = sqlite3_column_int(stmt, 0);
+    int availableStock = sqlite3_column_int(stmt, 1);
+
+    sqlite3_finalize(stmt);
+
+    if (totalStock < 0) {
+        return false;
+    }
+
+    if (availableStock < 0) {
+        return false;
+    }
+
+    if (availableStock > totalStock) {
+        return false;
+    }
+
+    return true;
 }
 
 vector<Book> InventoryManager::getInventoryList() {
-    // TODO: get inventory list
-    return {};
+    vector<Book> result;
+
+    // 由于 Book 成员 private 且没有完整 setter，
+    // 这里暂时返回空 vector。
+    // API 层会直接查询数据库生成 JSON。
+    return result;
 }
 
 vector<Book> InventoryManager::getLowStockBooks(int threshold) {
-    // TODO: get low-stock books
-    return {};
+    vector<Book> result;
+
+    // 同上，API 层直接查询数据库。
+    return result;
+}
+
+// ============================================================
+// BackupManager implementation
+// ============================================================
+
+static bool fileExistsOld(const string& filePath) {
+    ifstream file(filePath.c_str(), ios::binary);
+    bool exists = file.good();
+    file.close();
+    return exists;
+}
+
+static bool copyFileOldStyle(const string& sourcePath, const string& targetPath) {
+    ifstream source(sourcePath.c_str(), ios::binary);
+    ofstream target(targetPath.c_str(), ios::binary);
+
+    if (!source.is_open() || !target.is_open()) {
+        return false;
+    }
+
+    target << source.rdbuf();
+
+    source.close();
+    target.close();
+
+    return true;
+}
+
+string BackupManager::generateBackupFileName() {
+    time_t now = time(NULL);
+    struct tm localTime;
+
+#ifdef _WIN32
+    localtime_s(&localTime, &now);
+#else
+    localtime_r(&now, &localTime);
+#endif
+
+    char buffer[128];
+
+#ifdef _WIN32
+    sprintf_s(buffer, sizeof(buffer),
+              "library_backup_%04d%02d%02d_%02d%02d%02d.db",
+              localTime.tm_year + 1900,
+              localTime.tm_mon + 1,
+              localTime.tm_mday,
+              localTime.tm_hour,
+              localTime.tm_min,
+              localTime.tm_sec);
+#else
+    sprintf(buffer,
+            "library_backup_%04d%02d%02d_%02d%02d%02d.db",
+            localTime.tm_year + 1900,
+            localTime.tm_mon + 1,
+            localTime.tm_mday,
+            localTime.tm_hour,
+            localTime.tm_min,
+            localTime.tm_sec);
+#endif
+
+    return string(buffer);
+}
+
+bool BackupManager::validateBackupFile(const string& filePath) {
+    if (filePath.empty()) {
+        return false;
+    }
+
+    if (!fileExistsOld(filePath)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool BackupManager::backupData(const string& backupPath) {
+    string sourceDbPath = "library.db";
+    string targetPath = backupPath;
+
+    if (!fileExistsOld(sourceDbPath)) {
+        cerr << "[Backup] Source database file does not exist." << endl;
+        return false;
+    }
+
+    if (targetPath.empty()) {
+        targetPath = generateBackupFileName();
+    }
+
+    // 为避免数据库仍有连接导致复制不完整，先关闭数据库
+    DatabaseManager::getInstance().close();
+
+    bool ok = copyFileOldStyle(sourceDbPath, targetPath);
+
+    // 重新打开数据库
+    DatabaseManager::getInstance().open(sourceDbPath);
+    DatabaseManager::getInstance().initTables();
+
+    if (!ok) {
+        cerr << "[Backup] Failed to copy database file." << endl;
+        return false;
+    }
+
+    cout << "[Backup] Backup created: " << targetPath << endl;
+    return true;
+}
+
+bool BackupManager::restoreData(const string& backupPath) {
+    string targetDbPath = "library.db";
+    string beforeRestorePath = "library_before_restore.db";
+
+    if (!validateBackupFile(backupPath)) {
+        cerr << "[Backup] Invalid backup file." << endl;
+        return false;
+    }
+
+    // 先关闭数据库连接
+    DatabaseManager::getInstance().close();
+
+    // 恢复前先备份当前数据库
+    if (fileExistsOld(targetDbPath)) {
+        copyFileOldStyle(targetDbPath, beforeRestorePath);
+    }
+
+    bool ok = copyFileOldStyle(backupPath, targetDbPath);
+
+    // 重新打开数据库
+    DatabaseManager::getInstance().open(targetDbPath);
+    DatabaseManager::getInstance().initTables();
+
+    if (!ok) {
+        cerr << "[Backup] Failed to restore database." << endl;
+        return false;
+    }
+
+    cout << "[Backup] Database restored from: " << backupPath << endl;
+    return true;
 }
 
 // ============================================================
