@@ -5,13 +5,11 @@
       <nav>
         <ul>
           <li class="active">首页看板</li>
-          <li>图书管理</li>
-          <li>借阅办理</li>
-          <li>罚款管理</li>
-          <li>用户管理</li>
-          <li>反馈处理</li>
-          <li>操作日志</li>
-          <li>系统备份</li>
+          <li><router-link to="/admin/books">图书管理</router-link></li>
+          <li><router-link to="/admin/users">用户管理</router-link></li>
+          <li><router-link to="/admin/feedback">反馈处理</router-link></li>
+          <li><router-link to="/admin/backup">系统备份</router-link></li>
+          <li @click="logout">退出登录</li>
           <li @click="logout">退出登录</li>
         </ul>
       </nav>
