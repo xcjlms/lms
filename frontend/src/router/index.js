@@ -65,6 +65,36 @@ const routes = [
     name: 'Profile',
     component: () => import('../views/Profile.vue'),
   },
+  {
+    path: '/admin/books',
+    name: 'BookManage',
+    component: () => import('../views/BookManage.vue'),
+  },
+  {
+    path: '/admin/users',
+    name: 'UserManage',
+    component: () => import('../views/UserManage.vue'),
+  },
+  {
+    path: '/admin/feedback',
+    name: 'FeedbackManage',
+    component: () => import('../views/FeedbackManage.vue'),
+  },
+  {
+    path: '/admin/backup',
+    name: 'Backup',
+    component: () => import('../views/Backup.vue'),
+  },
+  {
+    path: '/reader/feedback',
+    name: 'FeedbackSubmit',
+    component: () => import('../views/FeedbackSubmit.vue'),
+  },
+  {
+    path: '/reader/profile',
+    name: 'Profile',
+    component: () => import('../views/Profile.vue'),
+  },
 ]
 
 const router = createRouter({
