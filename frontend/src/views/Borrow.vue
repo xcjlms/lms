@@ -70,7 +70,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as api from '../api/index.js'
+
+const route = useRoute()
+const router = useRouter()
 
 const keyword = ref('')
 const books = ref([])
@@ -83,9 +87,11 @@ const message = ref('')
 const raw = localStorage.getItem('lms_user')
 const userInfo = raw ? JSON.parse(raw) : {}
 
-async function searchBooks() {
+async function searchBooks(category) {
   try {
-    const res = await api.getBooks(keyword.value)
+    // 从分类入口进入时用 category 过滤；用户手动搜索时仅按关键词
+    const cat = category || ''
+    const res = await api.getBooks(cat ? '' : keyword.value, cat)
     books.value = res.data?.books || []
     selectedBook.value = null
     message.value = ''
@@ -114,7 +120,7 @@ async function confirmBorrow() {
     return
   }
   try {
-    await api.borrowBook(userInfo.user_id, selectedBook.value.book_id)
+    await api.borrowBook(userInfo.user_id, selectedBook.value.book_id, borrowDuration.value)
     message.value = `《${selectedBook.value.title}》借阅成功！`
     showDialog.value = false
     // Refresh book list
@@ -124,7 +130,14 @@ async function confirmBorrow() {
   }
 }
 
-onMounted(() => { searchBooks() })
+onMounted(() => {
+  const cat = route.query.category
+  if (cat) {
+    searchBooks(cat)
+  } else {
+    searchBooks()
+  }
+})
 </script>
 
 <style scoped>

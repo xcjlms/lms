@@ -267,7 +267,7 @@ public:
 // ==================== BorrowManager ====================
 class Borrowmanager {
 public:
-    bool borrowBook(int userID, int bookID);
+    bool borrowBook(int userID, int bookID, int durationDays = BORROW_DAYS);
     bool returnBook(int userID, int bookID);
     vector<BorrowRecord> getBorrowHistory(int userID);
     vector<BorrowRecord> getAllBorrowRecords();

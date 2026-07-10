@@ -30,8 +30,11 @@ export function register(username, password, role) {
 }
 
 // ---- Books ----
-export function getBooks(keyword = '') {
-  const query = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
+export function getBooks(keyword = '', category = '') {
+  const params = []
+  if (keyword) params.push(`keyword=${encodeURIComponent(keyword)}`)
+  if (category) params.push(`category=${encodeURIComponent(category)}`)
+  const query = params.length ? '?' + params.join('&') : ''
   return request('/books' + query)
 }
 
@@ -54,10 +57,10 @@ export function editBook(bookId, book) {
 }
 
 // ---- Borrow / Return ----
-export function borrowBook(userId, bookId) {
+export function borrowBook(userId, bookId, days = 30) {
   return request('/borrow', {
     method: 'POST',
-    body: JSON.stringify({ user_id: userId, book_id: bookId }),
+    body: JSON.stringify({ user_id: userId, book_id: bookId, duration_days: days }),
   })
 }
 
@@ -94,6 +97,11 @@ export function payFine(fineId) {
     method: 'POST',
     body: JSON.stringify({ fine_id: fineId }),
   })
+}
+
+// ---- Categories ----
+export function getCategories() {
+  return request('/categories')
 }
 
 // ---- Inventory ----

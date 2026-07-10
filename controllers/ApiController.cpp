@@ -1,5 +1,6 @@
 #include "ApiController.h"
 #include <iostream>
+#include <map>
 #include <json/json.h>
 #include <cstdlib>
 
@@ -163,9 +164,10 @@ void ApiController::borrowBook(const HttpRequestPtr& req,
 
     int userId = (*json)["user_id"].asInt();
     int bookId = (*json)["book_id"].asInt();
+    int duration = json->get("duration_days", 30).asInt();
 
     Borrowmanager bm;
-    bool ok = bm.borrowBook(userId, bookId);
+    bool ok = bm.borrowBook(userId, bookId, duration);
 
     if (ok)
         callback(jsonResponse(true, "Book borrowed successfully"));
@@ -354,19 +356,25 @@ void ApiController::getBookList(const HttpRequestPtr& req,
 
     auto params = req->getParameters();
     string keyword = params.count("keyword") ? params["keyword"] : "";
+    string category = params.count("category") ? params["category"] : "";
 
-    string sql;
-    if (keyword.empty()) {
-    sql = "SELECT book_id, isbn, title, author, publisher, "
-          "total_stock, available_stock, location, status FROM books "
-          "WHERE status != 'DELETED'";
-} else {
-    sql = "SELECT book_id, isbn, title, author, publisher, "
-          "total_stock, available_stock, location, status FROM books "
-          "WHERE status != 'DELETED' AND "
-          "(title LIKE '%" + keyword + "%' OR author LIKE '%" + keyword + "%')";
-}
-sql += " ORDER BY book_id";
+    // Escape single quotes for SQL safety
+    auto esc = [](const string& s) -> string {
+        string out; for (char c : s) { if (c == '\'') out += "''"; else out += c; }
+        return out;
+    };
+
+    string sql = "SELECT book_id, isbn, title, author, publisher, "
+                 "total_stock, available_stock, location, status FROM books "
+                 "WHERE status != 'DELETED'";
+
+    if (!category.empty()) {
+        sql += " AND category_id = '" + esc(category) + "'";
+    }
+    if (!keyword.empty()) {
+        sql += " AND (title LIKE '%" + esc(keyword) + "%' OR author LIKE '%" + esc(keyword) + "%')";
+    }
+    sql += " ORDER BY book_id";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
@@ -443,6 +451,64 @@ void ApiController::addBook(const HttpRequestPtr& req,
     } else {
         callback(jsonResponse(false, "Failed to add book"));
     }
+}
+
+// ============================================================
+// GET /api/categories
+// ============================================================
+void ApiController::getCategories(const HttpRequestPtr& req,
+                                   function<void(const HttpResponsePtr&)>&& callback) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+    if (!db) {
+        callback(jsonResponse(false, "Database not connected"));
+        return;
+    }
+
+    string sql = "SELECT DISTINCT category_id FROM books "
+                 "WHERE category_id != '' AND status != 'DELETED' "
+                 "ORDER BY category_id";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        callback(jsonResponse(false, "SQL error"));
+        return;
+    }
+
+    // Color map for categories
+    auto colorFor = [](const string& cat) -> string {
+        static const map<string,string> colors = {
+            {"科技", "#80d8ff"}, {"文学", "#ff8a80"}, {"历史", "#ffd180"},
+            {"教育", "#b9f6ca"}, {"艺术", "#ea80fc"}, {"哲学", "#a5d6a7"},
+            {"经济", "#ffcc80"}, {"医学", "#ef9a9a"}, {"其他", "#cfd8dc"},
+        };
+        auto it = colors.find(cat);
+        return it != colors.end() ? it->second : "#cfd8dc";
+    };
+
+    Json::Value cats(Json::arrayValue);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Json::Value c;
+        string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        c["name"] = name;
+        c["color"] = colorFor(name);
+        cats.append(c);
+    }
+    sqlite3_finalize(stmt);
+
+    // Add fallback categories if DB has none
+    if (cats.empty()) {
+        Json::Value defaults;
+        defaults[0]["name"] = "科技";  defaults[0]["color"] = "#80d8ff";
+        defaults[1]["name"] = "文学";  defaults[1]["color"] = "#ff8a80";
+        defaults[2]["name"] = "历史";  defaults[2]["color"] = "#ffd180";
+        defaults[3]["name"] = "教育";  defaults[3]["color"] = "#b9f6ca";
+        cats = defaults;
+    }
+
+    Json::Value data;
+    data["categories"] = cats;
+    data["count"] = cats.size();
+    callback(jsonResponse(true, "OK", data));
 }
 
 // ============================================================

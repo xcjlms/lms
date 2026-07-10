@@ -602,7 +602,7 @@ vector<Book> InventoryManager::getLowStockBooks(int threshold) {
 // ============================================================
 // BorrowManager implementation (fully implemented)
 // ============================================================
-bool Borrowmanager::borrowBook(int userID, int bookID) {
+bool Borrowmanager::borrowBook(int userID, int bookID, int durationDays) {
     sqlite3* db = DatabaseManager::getInstance().getConnection();
     if (!db) {
         cerr << "[Borrow] Database not connected." << endl;
@@ -681,7 +681,8 @@ bool Borrowmanager::borrowBook(int userID, int bookID) {
 
     // Insert record
     time_t now = time(nullptr);
-    time_t due = now + BORROW_DAYS * 24 * 3600;
+    int days = (durationDays > 0) ? durationDays : BORROW_DAYS;
+    time_t due = now + days * 24 * 3600;
     string borrowDate = timeToString(now);
     string dueDate = timeToString(due);
     string sql = "INSERT INTO borrow_records (book_id, user_id, borrow_date, due_date, status) VALUES (" +

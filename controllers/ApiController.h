@@ -35,6 +35,7 @@ public:
         // Books
         ADD_METHOD_TO(ApiController::getBookList,  "/api/books",    Get);
         ADD_METHOD_TO(ApiController::addBook,      "/api/books",    Post);
+        ADD_METHOD_TO(ApiController::getCategories,"/api/categories", Get);
 
         // Auth
         ADD_METHOD_TO(ApiController::login,    "/api/login",    Post);
@@ -98,6 +99,8 @@ public:
                      std::function<void(const HttpResponsePtr&)>&& callback);
     void addBook(const HttpRequestPtr& req,
                  std::function<void(const HttpResponsePtr&)>&& callback);
+    void getCategories(const HttpRequestPtr& req,
+                       std::function<void(const HttpResponsePtr&)>&& callback);
 
     void editBook(const HttpRequestPtr& req,
                   std::function<void(const HttpResponsePtr&)>&& callback,

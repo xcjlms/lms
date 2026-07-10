@@ -82,8 +82,8 @@
         <section class="category-entry">
           <div class="section-header">分类快捷入口</div>
           <div class="category-grid">
-            <button v-for="category in categories" :key="category.name" class="category-button" :style="{ backgroundColor: category.color }">
-              {{ category.name }}
+            <button v-for="cat in categories" :key="cat.name" class="category-button" :style="{ backgroundColor: cat.color }" @click="navigateToCategory(cat.name)">
+              {{ cat.name }}
             </button>
           </div>
         </section>
@@ -126,12 +126,20 @@ const stats = reactive({
   historyTotal: 0,
 })
 const hotBooks = ref([])
-const categories = [
-  { name: '文学', color: '#ff8a80' },
-  { name: '科技', color: '#80d8ff' },
-  { name: '历史', color: '#ffd180' },
-  { name: '教育', color: '#b9f6ca' },
-]
+const categories = ref([])
+
+async function fetchCategories() {
+  try {
+    const res = await api.getCategories()
+    categories.value = res.data?.categories || []
+  } catch (e) {
+    console.error('Failed to load categories:', e)
+  }
+}
+
+function navigateToCategory(name) {
+  router.push(`/borrow?category=${encodeURIComponent(name)}`)
+}
 
 async function fetchData() {
   try {
@@ -174,7 +182,7 @@ function logout() {
   router.push('/login')
 }
 
-onMounted(fetchData)
+onMounted(() => { fetchData(); fetchCategories() })
 </script>
 
 <style scoped>
