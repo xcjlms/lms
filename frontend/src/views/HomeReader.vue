@@ -109,8 +109,8 @@ const menu = [
   { label: '图书检索', path: '/borrow' },
   { label: '我的借阅', path: '/back' },
   { label: '我的罚款', path: '/fine' },
-  { label: '意见反馈' },
-  { label: '个人信息修改' },
+  { label: '意见反馈', path: '/reader/feedback' },
+  { label: '个人信息修改', path: '/reader/profile' },
 ]
 
 const hasOverdue = ref(false)
