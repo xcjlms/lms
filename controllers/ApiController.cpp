@@ -350,15 +350,16 @@ void ApiController::getBookList(const HttpRequestPtr& req,
 
     string sql;
     if (keyword.empty()) {
-        sql = "SELECT book_id, isbn, title, author, publisher, "
-              "total_stock, available_stock, location, status FROM books";
-    } else {
-        // Simple search: match title or author
-        sql = "SELECT book_id, isbn, title, author, publisher, "
-              "total_stock, available_stock, location, status FROM books "
-              "WHERE title LIKE '%" + keyword + "%' OR author LIKE '%" + keyword + "%'";
-    }
-    sql += " ORDER BY book_id";
+    sql = "SELECT book_id, isbn, title, author, publisher, "
+          "total_stock, available_stock, location, status FROM books "
+          "WHERE status != 'DELETED'";
+} else {
+    sql = "SELECT book_id, isbn, title, author, publisher, "
+          "total_stock, available_stock, location, status FROM books "
+          "WHERE status != 'DELETED' AND "
+          "(title LIKE '%" + keyword + "%' OR author LIKE '%" + keyword + "%')";
+}
+sql += " ORDER BY book_id";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
