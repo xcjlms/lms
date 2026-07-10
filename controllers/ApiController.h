@@ -11,6 +11,14 @@ using namespace drogon;
 class ApiController : public drogon::HttpController<ApiController> {
 public:
     METHOD_LIST_BEGIN
+        // Management
+        ADD_METHOD_TO(ApiController::getUsers, "/api/users", Get);
+        ADD_METHOD_TO(ApiController::updateUser, "/api/users/{1}", Put);
+
+        // Feedback
+        ADD_METHOD_TO(ApiController::submitFeedback, "/api/feedback", Post);
+        ADD_METHOD_TO(ApiController::getFeedbackList, "/api/feedback", Get);
+        ADD_METHOD_TO(ApiController::replyFeedback, "/api/feedback/{1}/reply", Post);
         // Borrow / Return
         ADD_METHOD_TO(ApiController::borrowBook,   "/api/borrow",   Post);
         ADD_METHOD_TO(ApiController::returnBook,   "/api/return",   Post);
@@ -44,7 +52,21 @@ public:
         // Borrow history
         ADD_METHOD_TO(ApiController::getBorrowHistory, "/api/records", Get);
     METHOD_LIST_END
+    // Management
+    void getUsers(const HttpRequestPtr& req,
+             std::function<void(const HttpResponsePtr&)>&& callback);
+    void updateUser(const HttpRequestPtr& req,
+                std::function<void(const HttpResponsePtr&)>&& callback,
+                int userID);
 
+    // Feedback
+    void submitFeedback(const HttpRequestPtr& req,
+                    std::function<void(const HttpResponsePtr&)>&& callback);
+    void getFeedbackList(const HttpRequestPtr& req,
+                     std::function<void(const HttpResponsePtr&)>&& callback);
+    void replyFeedback(const HttpRequestPtr& req,
+                   std::function<void(const HttpResponsePtr&)>&& callback,
+                   int feedbackID);
     // ----- Auth -----
     void login(const HttpRequestPtr& req,
                std::function<void(const HttpResponsePtr&)>&& callback);
