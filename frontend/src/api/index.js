@@ -124,8 +124,11 @@ export function backupData() {
   return request('/backup', { method: 'POST' })
 }
 
-export function restoreData() {
-  return request('/restore', { method: 'POST' })
+export function restoreData(backupPath) {
+  return request('/restore', {
+    method: 'POST',
+    body: JSON.stringify({ backup_path: backupPath }),
+  })
 }
 // ---- Users ----
 export function getUsers() {
