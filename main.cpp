@@ -41,10 +41,15 @@ int main() {
 
     cout << "Database initialized with test data." << endl;
 
-    // 3. Start Drogon HTTP server
-    cout << "\nStarting Library Management System API Server..." << endl;
-    cout << "Listen on http://0.0.0.0:8080" << endl;
-    cout << "Try: curl http://localhost:8080/api/books\n" << endl;
+    // 3. Serve frontend static files (built by `cd frontend && npm run build`)
+    //    The index.html and assets are served from frontend/dist/
+    //    API routes (/api/*) take priority over static files
+    drogon::app().setDocumentRoot("../../frontend/dist");
+
+    // 4. Start Drogon HTTP server
+    cout << "\nStarting Library Management System..." << endl;
+    cout << "  API:      http://0.0.0.0:8080/api/books" << endl;
+    cout << "  Frontend: http://0.0.0.0:8080 (after building frontend)" << endl;
 
     try {
         drogon::app()

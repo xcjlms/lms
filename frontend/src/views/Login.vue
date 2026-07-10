@@ -333,7 +333,7 @@ const submitLogin = async () => {
     localStorage.setItem('lms_user', JSON.stringify(user))
     infoMessage.value = '登录成功，欢迎回来！'
     setTimeout(() => {
-      router.push(user.role === 'admin' ? '/home/admin' : '/home/reader')
+      router.push(user.role === 'MANAGER' ? '/home/admin' : '/home/reader')
     }, 600)
   } catch (e) {
     loginError.value = e.message || '登录失败'
