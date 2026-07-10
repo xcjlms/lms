@@ -928,3 +928,46 @@ void ApiController::replyFeedback(const HttpRequestPtr& req,
     bool ok = fm.handleFeedback(feedbackID, reply);
     callback(ok ? jsonResponse(true, "Reply sent") : jsonResponse(false, "Reply failed"));
 }
+void ApiController::changePassword(const HttpRequestPtr& req,
+                                   function<void(const HttpResponsePtr&)>&& callback) {
+    auto json = req->getJsonObject();
+    if (!json || !(*json)["user_id"].isInt() || 
+        !(*json)["old_password"].isString() || 
+        !(*json)["new_password"].isString()) {
+        callback(badRequest("Requires user_id, old_password, new_password"));
+        return;
+    }
+    int userID = (*json)["user_id"].asInt();
+    string oldPwd = (*json)["old_password"].asString();
+    string newPwd = (*json)["new_password"].asString();
+
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+    if (!db) {
+        callback(jsonResponse(false, "Database error"));
+        return;
+    }
+
+    // 查询用户当前密码
+    string sql = "SELECT password_hash FROM users WHERE user_id = " + to_string(userID);
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        callback(jsonResponse(false, "SQL error"));
+        return;
+    }
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
+        callback(jsonResponse(false, "User not found"));
+        return;
+    }
+    string hash = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+    sqlite3_finalize(stmt);
+
+    if (hash != oldPwd) {
+        callback(jsonResponse(false, "Old password incorrect"));
+        return;
+    }
+
+    string update = "UPDATE users SET password_hash = '" + newPwd + "' WHERE user_id = " + to_string(userID);
+    bool ok = DatabaseManager::getInstance().execSQL(update);
+    callback(ok ? jsonResponse(true, "Password updated") : jsonResponse(false, "Update failed"));
+}
