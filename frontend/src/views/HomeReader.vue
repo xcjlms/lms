@@ -22,7 +22,10 @@
       <aside class="sidebar">
         <nav>
           <ul>
-            <li v-for="item in menu" :key="item.label" @click="navigate(item.path)">{{ item.label }}</li>
+            <li v-for="item in menu" :key="item.label">
+              <router-link v-if="item.path" :to="item.path">{{ item.label }}</router-link>
+              <span v-else>{{ item.label }}</span>
+            </li>
           </ul>
         </nav>
       </aside>
@@ -171,10 +174,6 @@ function logout() {
   router.push('/login')
 }
 
-function navigate(path) {
-  if (path) router.push(path)
-}
-
 onMounted(fetchData)
 </script>
 
@@ -193,8 +192,22 @@ onMounted(fetchData)
 .layout { display: flex; padding: 24px; gap: 24px; }
 .sidebar { width: 220px; background: #fff; border: 1px solid #ebedf0; border-radius: 14px; padding: 20px 0; flex-shrink: 0; }
 .sidebar nav ul { list-style: none; margin: 0; padding: 0; }
-.sidebar nav li { padding: 14px 24px; cursor: pointer; color: #333; transition: background .2s ease; }
-.sidebar nav li:hover { background: #f5f7fb; }
+.sidebar nav li { padding: 0; /* 移除默认内边距，由内部 a 控制 */ }
+/* 新增 router-link 样式 */
+.sidebar nav a {
+  display: block;
+  padding: 14px 24px;
+  color: #333;
+  text-decoration: none;
+  transition: background .2s ease;
+}
+.sidebar nav a:hover {
+  background: #f5f7fb;
+}
+.sidebar nav a.router-link-active {
+  background: #e8edf5;
+  font-weight: 600;
+}
 .content { flex: 1; display: flex; flex-direction: column; gap: 20px; }
 .banner { background: linear-gradient(135deg, #5164f5 0%, #8f9dff 100%); border-radius: 20px; color: #fff; padding: 24px; }
 .banner-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
