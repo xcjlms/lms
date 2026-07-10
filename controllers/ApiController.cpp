@@ -4,7 +4,14 @@
 #include <cstdlib>
 
 using namespace std;
-
+static string join(const vector<string>& parts, const string& delim) {
+    string result;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i) result += delim;
+        result += parts[i];
+    }
+    return result;
+}
 // ============================================================
 // Helper: build JSON responses
 // ============================================================
@@ -779,4 +786,145 @@ void ApiController::restoreData(const HttpRequestPtr& req,
     } else {
         callback(jsonResponse(false, "Failed to restore database"));
     }
+}
+// ========== 用户管理 ==========
+void ApiController::getUsers(const HttpRequestPtr& req,
+                             function<void(const HttpResponsePtr&)>&& callback) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+    if (!db) {
+        callback(jsonResponse(false, "Database not connected"));
+        return;
+    }
+
+    string sql = "SELECT user_id, username, role, status FROM users ORDER BY user_id";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        callback(jsonResponse(false, "SQL error"));
+        return;
+    }
+
+    Json::Value users(Json::arrayValue);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Json::Value u;
+        u["user_id"]  = sqlite3_column_int(stmt, 0);
+        u["username"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        u["role"]     = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        u["status"]   = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        users.append(u);
+    }
+    sqlite3_finalize(stmt);
+
+    Json::Value data;
+    data["users"] = users;
+    data["count"] = users.size();
+    callback(jsonResponse(true, "OK", data));
+}
+
+void ApiController::updateUser(const HttpRequestPtr& req,
+                               function<void(const HttpResponsePtr&)>&& callback,
+                               int userID) {
+    auto json = req->getJsonObject();
+    if (!json) {
+        callback(badRequest("Requires JSON body"));
+        return;
+    }
+
+    string role = json->get("role", "").asString();
+    string status = json->get("status", "").asString();
+
+    if (role.empty() && status.empty()) {
+        callback(badRequest("At least one field (role/status) required"));
+        return;
+    }
+
+    vector<string> setParts;
+    if (!role.empty()) {
+        if (role != "READER" && role != "MANAGER") {
+            callback(badRequest("Role must be READER or MANAGER"));
+            return;
+        }
+        setParts.push_back("role = '" + role + "'");
+    }
+    if (!status.empty()) {
+        if (status != "ACTIVE" && status != "SUSPENDED") {
+            callback(badRequest("Status must be ACTIVE or SUSPENDED"));
+            return;
+        }
+        setParts.push_back("status = '" + status + "'");
+    }
+
+    string sql = "UPDATE users SET " + join(setParts, ", ") + " WHERE user_id = " + to_string(userID);
+    bool ok = DatabaseManager::getInstance().execSQL(sql);
+    callback(ok ? jsonResponse(true, "User updated") : jsonResponse(false, "Update failed"));
+}
+
+// ========== 反馈 ==========
+void ApiController::submitFeedback(const HttpRequestPtr& req,
+                                   function<void(const HttpResponsePtr&)>&& callback) {
+    auto json = req->getJsonObject();
+    if (!json || !(*json)["title"].isString() || !(*json)["content"].isString()) {
+        callback(badRequest("Requires title and content"));
+        return;
+    }
+    // 从请求中获取用户ID（通常从session/token获取，此处简化：从body获取或默认）
+    int userID = json->get("user_id", 0).asInt();
+    if (userID <= 0) {
+        callback(badRequest("user_id is required"));
+        return;
+    }
+    string title = (*json)["title"].asString();
+    string content = (*json)["content"].asString();
+
+    FeedbackManager fm;
+    bool ok = fm.submitFeedback(userID, title, content);
+    callback(ok ? jsonResponse(true, "Feedback submitted") : jsonResponse(false, "Submit failed"));
+}
+
+void ApiController::getFeedbackList(const HttpRequestPtr& req,
+                                    function<void(const HttpResponsePtr&)>&& callback) {
+    sqlite3* db = DatabaseManager::getInstance().getConnection();
+    if (!db) {
+        callback(jsonResponse(false, "Database not connected"));
+        return;
+    }
+
+    string sql = "SELECT feedback_id, user_id, title, content, submitted_at, status, reply FROM feedback ORDER BY submitted_at DESC";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        callback(jsonResponse(false, "SQL error"));
+        return;
+    }
+
+    Json::Value items(Json::arrayValue);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Json::Value f;
+        f["feedback_id"] = sqlite3_column_int(stmt, 0);
+        f["user_id"]     = sqlite3_column_int(stmt, 1);
+        f["title"]       = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        f["content"]     = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        f["submitted_at"]= reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        f["status"]      = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        f["reply"]       = (sqlite3_column_type(stmt, 6) != SQLITE_NULL) ? reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)) : "";
+        items.append(f);
+    }
+    sqlite3_finalize(stmt);
+
+    Json::Value data;
+    data["list"] = items;
+    data["count"] = items.size();
+    callback(jsonResponse(true, "OK", data));
+}
+
+void ApiController::replyFeedback(const HttpRequestPtr& req,
+                                  function<void(const HttpResponsePtr&)>&& callback,
+                                  int feedbackID) {
+    auto json = req->getJsonObject();
+    if (!json || !(*json)["reply"].isString()) {
+        callback(badRequest("Requires reply text"));
+        return;
+    }
+    string reply = (*json)["reply"].asString();
+    FeedbackManager fm;
+    bool ok = fm.handleFeedback(feedbackID, reply);
+    callback(ok ? jsonResponse(true, "Reply sent") : jsonResponse(false, "Reply failed"));
 }
