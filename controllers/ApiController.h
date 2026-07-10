@@ -11,6 +11,7 @@ using namespace drogon;
 class ApiController : public drogon::HttpController<ApiController> {
 public:
     METHOD_LIST_BEGIN
+        ADD_METHOD_TO(ApiController::changePassword, "/api/change_password", Post);
         // Management
         ADD_METHOD_TO(ApiController::getUsers, "/api/users", Get);
         ADD_METHOD_TO(ApiController::updateUser, "/api/users/{1}", Put);
@@ -63,16 +64,17 @@ public:
     void submitFeedback(const HttpRequestPtr& req,
                     std::function<void(const HttpResponsePtr&)>&& callback);
     void getFeedbackList(const HttpRequestPtr& req,
-                     std::function<void(const HttpResponsePtr&)>&& callback);
+                    std::function<void(const HttpResponsePtr&)>&& callback);
     void replyFeedback(const HttpRequestPtr& req,
-                   std::function<void(const HttpResponsePtr&)>&& callback,
+                    std::function<void(const HttpResponsePtr&)>&& callback,
                    int feedbackID);
     // ----- Auth -----
     void login(const HttpRequestPtr& req,
-               std::function<void(const HttpResponsePtr&)>&& callback);
+                    std::function<void(const HttpResponsePtr&)>&& callback);
     void reg(const HttpRequestPtr& req,
-             std::function<void(const HttpResponsePtr&)>&& callback);
-
+                    std::function<void(const HttpResponsePtr&)>&& callback);
+    void changePassword(const HttpRequestPtr& req,
+                    std::function<void(const HttpResponsePtr&)>&& callback);
     // ----- Borrow / Return -----
     void borrowBook(const HttpRequestPtr& req,
                     std::function<void(const HttpResponsePtr&)>&& callback);
