@@ -157,3 +157,15 @@ export function replyFeedback(feedbackId, reply) {
     body: JSON.stringify({ reply }),
   })
 }
+
+// ---- Profile ----
+export function changePassword(userId, oldPassword, newPassword) {
+  return request('/change_password', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: userId,
+      old_password: oldPassword,
+      new_password: newPassword,
+    }),
+  })
+}
