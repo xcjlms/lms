@@ -4,12 +4,11 @@
       <div class="brand">图书管理后台</div>
       <nav>
         <ul>
-          <li class="active">首页看板</li>
+          <li><router-link to="/home/admin">首页看板</router-link></li>
           <li><router-link to="/admin/books">图书管理</router-link></li>
           <li><router-link to="/admin/users">用户管理</router-link></li>
           <li><router-link to="/admin/feedback">反馈处理</router-link></li>
           <li><router-link to="/admin/backup">系统备份</router-link></li>
-          <li @click="logout">退出登录</li>
           <li @click="logout">退出登录</li>
         </ul>
       </nav>
