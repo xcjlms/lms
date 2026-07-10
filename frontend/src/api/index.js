@@ -127,3 +127,33 @@ export function backupData() {
 export function restoreData() {
   return request('/restore', { method: 'POST' })
 }
+// ---- Users ----
+export function getUsers() {
+  return request('/users')
+}
+
+export function updateUser(userId, role, status) {
+  return request(`/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ role, status }),
+  })
+}
+
+// ---- Feedback ----
+export function submitFeedback(userId, title, content) {
+  return request('/feedback', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, title, content }),
+  })
+}
+
+export function getFeedbackList() {
+  return request('/feedback')
+}
+
+export function replyFeedback(feedbackId, reply) {
+  return request(`/feedback/${feedbackId}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ reply }),
+  })
+}
