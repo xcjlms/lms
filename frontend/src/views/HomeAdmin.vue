@@ -165,6 +165,20 @@ onMounted(fetchData)
   transition: background 0.2s ease;
 }
 
+.side-menu nav a {
+  display: block;
+  padding: 12px 16px;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: background 0.2s ease;
+}
+.side-menu nav a:hover,
+.side-menu nav a.router-link-active {
+  background: rgba(255, 255, 255, 0.1);
+}
+  
 .side-menu nav li.active,
 .side-menu nav li:hover {
   background: rgba(255, 255, 255, 0.1);
